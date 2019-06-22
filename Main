@@ -1,0 +1,583 @@
+#include <SoftwareSerial.h>       //Einbindung der Bibliothek "SoftwareSerial" zur Verwaltung einer virtuellen, seriellen Schnittstelle über digitale I/O-Pins
+SoftwareSerial BTSerial(52, 53);  //Definition der virtuellen seriellen Ports
+
+#include "U8glib.h"                           //Einbdung der Bibliothek "U8glib" zur Beschriftung des Displays
+U8GLIB_SH1106_128X64 u8g(U8G_I2C_OPT_NONE);   //Definition der Displaygröße
+
+#include <Artnet.h>                           //Einbindung der Bibliothek "Artnet" zur Verwendung des Artnet-Protokolls
+#include <Ethernet.h>                         //Einbindung der Bibliothek "Ethernet" zur Verwendung der Ethernet-Schnittstelle
+#include <EthernetUdp.h>
+#include <SPI.h>
+
+#include <DMXSerial.h>                        //Einbindung der Bibliothek "DMXSerial" für den DMX-Input
+#include <DmxSimple.h>                        //Einbindung der Bibliothek "DmxSimple" für den DMX-Output
+
+Artnet artnet;                                //Zuweisung der Variablen artnet
+
+byte ip[] = {2, 0, 0, 41};                             //IP Adresse des Artnet-Ports festlegen
+byte mac[] = {0x04, 0xE9, 0xE5, 0x00, 0x69, 0xEC};     //MAC Adresse des Arduinos festlegen
+
+char modelabel = 'Boot';                               //Label
+
+int channel = 1;                                       //Channel-Cursor
+int btprint = 1;                                       //Switch zur Aktivierung der Ausgabe über Bluetooth
+int mode = 1;                                          //Indikator des Modus
+int ergebnis = 2;                                      //Ergebnis des Kabeltests (0=nicht bestanden; 1=bestanden; 2= Standby)
+int artnetset = 1;                                     //Indikator der Artnet-Größe (0=100Kanäle;1=512 Kanäle)
+
+int displ = 1;                                         //Switch zur Ausgabe der Informationen über das Display
+
+int teststart = 0;        //Test-Start                 //Start des Kabeltests
+
+int dmxvalues[512];                                    //Speicher-Variablen
+int dmxvaluesin[512];                                  //Speicher-Variablen
+int dmxbtstatus[512];                                  //Speicher-Variablen
+int dmxbt[512];                                        //Speicher-Variablen
+
+int btdelay = 30;                                      //Delay zwischen Senden von Daten an Bluetooth-Schnittstelle zur einwandfreien Übertragung
+
+
+void setup() {
+  BTSerial.begin(9600);                                //Start der Bluetooth-Verbidung auf 9600 Baut
+  Serial.begin(9600);                                  //Starten des Serial-Monitors
+  //  artnet.begin(mac, ip);                           //Start des Artnet-Empfangs
+
+  for (int i = 0; i <= 511; i++) {                     //Initialisierung der Werte-Speicher
+    dmxvalues[i] = 0;
+    dmxvaluesin[i] = 0;
+    dmxbtstatus[i] = 0;
+    dmxbt[i] = 0;
+  }
+
+  pinMode(10, OUTPUT);              //LED grün
+  pinMode(11, OUTPUT);              //LED rot
+  pinMode(30, INPUT_PULLUP);        //Up
+  pinMode(32, INPUT_PULLUP);        //Down
+  pinMode(34, INPUT_PULLUP);        //Left
+  pinMode(36, INPUT_PULLUP);        //Right
+  pinMode(40, INPUT_PULLUP);        //
+  DMXSerial.init(DMXReceiver);      //Einstellen der Serial-Bibliothek als DMX-Input
+  DmxSimple.usePin(2);              //Einstellen des Ausgangs für den DMX-Output
+
+  digitalWrite(10, LOW);            //Initialisierung der grünen LED
+  digitalWrite(11, LOW);            //Initialisierung der roten LED
+
+}
+
+void draw(void) {                   //DISPLAY ACTIVE: Ausgabe der Kanäle und Werte
+  u8g.setFont(u8g_font_profont12);
+  u8g.setPrintPos(0, 10);
+  u8g.print("Multinox");
+  u8g.setPrintPos(0, 25);
+  u8g.print("Mode");
+  u8g.setPrintPos(80, 25);
+  u8g.print(mode);
+  u8g.setPrintPos(0, 40);
+  u8g.print("Channel");
+  u8g.setPrintPos(80, 40);
+  u8g.print(channel);
+  u8g.setPrintPos(0, 55);
+  u8g.print("DMX");
+  u8g.setPrintPos(80, 55);
+  u8g.print(dmxvalues[(channel - 1)]);
+  if (dmxbtstatus[(channel - 1)] == 1) {
+    u8g.setPrintPos(100, 55);
+    u8g.print("/o");
+  }
+}
+
+void draw2(void) {                    //DISPLAY PASSIVE: High Performance Mode
+  u8g.setFont(u8g_font_profont12);
+  u8g.setPrintPos(0, 10);
+  u8g.print("Multinox");
+  u8g.setPrintPos(0, 25);
+  u8g.print("High Performance Mode");
+}
+
+void draw3(void) {                     //DISPLAY ACTIVE: Setup-Menü des Test-Modes
+  u8g.setFont(u8g_font_profont12);
+  u8g.setPrintPos(0, 10);
+  u8g.print("Multinox");
+  u8g.setPrintPos(0, 25);
+  u8g.print("Test Mode");
+  u8g.setPrintPos(0, 40);
+  u8g.print("Press Up to");
+  u8g.setPrintPos(0, 55);
+  u8g.print("start Test");
+}
+
+void draw4(void) {                      //DISPLAY ACTIVE: Test läuft
+  u8g.setFont(u8g_font_profont12);
+  u8g.setPrintPos(0, 10);
+  u8g.print("Multinox");
+  u8g.setPrintPos(0, 25);
+  u8g.print("Test Mode");
+  u8g.setPrintPos(0, 40);
+  u8g.print("TESTING");
+}
+
+void draw5(void) {                       //DISPLAY PASSIVE: APP-Testing
+  u8g.setFont(u8g_font_profont12);
+  u8g.setPrintPos(0, 10);
+  u8g.print("Multinox");
+  u8g.setPrintPos(0, 25);
+  u8g.print("Test Mode");
+  u8g.setPrintPos(0, 40);
+  u8g.print("App-Control");
+}
+
+
+
+
+void loop(void) {
+
+  if (BTSerial.available())                           //wenn Daten empfangen werden
+  {
+    String data = BTSerial.readStringUntil('X');
+    Serial.println(data);
+
+    if (data.substring(0, 1) == "M") {
+      Serial.println(data.substring(1));
+      if (data.substring(1, 2).toInt() == 0) {
+        mode = 0;
+      }
+      if (data.substring(1, 2).toInt() == 1) {
+        mode = 1;
+      }
+      if (data.substring(1, 2).toInt() == 2) {
+        mode = 2;
+      }
+      Serial.print("Changed to ");
+      Serial.println(mode);
+      BTSerial.print("M");
+      delay(btdelay);
+      BTSerial.print(mode);
+      delay(btdelay);
+      BTSerial.print("X");
+      delay(100);
+    }
+    
+//        if (data.substring(0, 1) == "T") {
+//          Serial.println(data.substring(1));
+//          if (data.substring(1, 2).toInt() == 0) {
+//            teststart = 0;}
+//          if (data.substring(1, 2).toInt() == 1) {
+//            teststart = 1;}
+//        }
+    
+    if (data.substring(0, 1) == "I") {
+      ip[0] = data.substring(1, 4).toInt();
+      ip[1] = data.substring(4, 7).toInt();
+      ip[2] = data.substring(7, 10).toInt();
+      ip[3] = data.substring(10, 13).toInt();
+//      Serial.println(ip[0]);
+//      Serial.println(ip[1]);
+//      Serial.println(ip[2]);
+//      Serial.println(ip[3]);
+      BTSerial.print("IP ");
+      delay(btdelay);
+      BTSerial.print(ip[0]);
+      delay(btdelay);
+      BTSerial.print(".");
+      delay(btdelay);
+      BTSerial.print(ip[1]);
+      delay(btdelay);
+      BTSerial.print(".");
+      delay(btdelay);
+      BTSerial.print(ip[2]);
+      delay(btdelay);
+      BTSerial.print(".");
+      delay(btdelay);
+      BTSerial.println(ip[3]);
+      delay(btdelay);
+    }
+    //
+    if (data.substring(0, 1) == "C") {
+      channel = data.substring(1, 4).toInt();
+      Serial.println(data.substring(1, 4).toInt());
+      dmxbt[(channel - 1)] = data.substring(5, 8).toInt(); //zurück ändern in dmxbt!!!
+      Serial.println(data.substring(5, 8).toInt());
+      Serial.println(dmxbt[(channel - 1)]);
+      Serial.println(dmxbtstatus[(channel - 1)]);
+      //      dmxbtstatus[(channel-1)]=1;
+    }
+
+    if (data.substring(0, 1) == "L") {
+      channel = data.substring(1, 4).toInt();
+      int over = data.substring(5, 6).toInt();
+      Serial.println(over);
+      if (over == 0) {
+        dmxbtstatus[(channel - 1)] = 0;
+      }
+      Serial.println(dmxbtstatus[(channel - 1)]);
+      if (over == 1) {
+        dmxbtstatus[(channel - 1)] = 1;
+      }
+      Serial.println(dmxbtstatus[(channel - 1)]);
+    }
+
+  }
+
+
+
+  if (displ == 1) {
+    if (mode == 1) {
+      u8g.firstPage();
+      do {
+        draw();
+      } while (u8g.nextPage());
+    }
+  }
+
+  if (displ == 0) {
+    if (mode == 1) {
+      u8g.firstPage();
+      do {
+        draw2();
+      } while (u8g.nextPage());
+      displ = 2;
+    }
+  }
+
+  if (displ == 1) {
+    if (mode == 2) {
+      u8g.firstPage();
+      do {
+        draw();
+      } while (u8g.nextPage());
+    }
+  }
+
+  if (displ == 0) {
+    if (mode == 2) {
+      u8g.firstPage();
+      do {
+        draw2();
+      } while (u8g.nextPage());
+      displ = 2;
+    }
+  }
+
+  if (displ == 1) {
+    if (mode == 0) {
+      if (teststart == 0) {
+        u8g.firstPage();
+        do {
+          draw3();
+        } while (u8g.nextPage());
+      }
+    }
+  }
+
+  if (displ == 1) {
+    if (mode == 0) {
+      if (teststart == 1) {
+        u8g.firstPage();
+        do {
+          draw4();
+        } while (u8g.nextPage());
+      }
+    }
+  }
+
+  if (displ == 0) {
+    if (mode == 0) {
+      if (teststart == 0) {
+        u8g.firstPage();
+        do {
+          draw5();
+        } while (u8g.nextPage());
+        displ = 3;
+      }
+    }
+  }
+
+  if (digitalRead(30) == LOW) { //up
+    if (dmxvalues[(channel - 1)] < 255) {
+      dmxvalues[(channel - 1)] = dmxvalues[(channel - 1)] + 1;
+      dmxbt[(channel - 1)] = dmxvalues[(channel - 1)];
+      dmxbtstatus[(channel - 1)] = 1;
+
+      BTSerial.print("C");
+      delay(btdelay);
+      BTSerial.print(channel);
+      delay(btdelay);
+      BTSerial.print("/");
+      delay(btdelay);
+      BTSerial.print((dmxvalues[(channel - 1)]));
+      delay(btdelay);
+      BTSerial.println("X");
+      delay(btdelay);
+
+      BTSerial.print("L");
+      delay(btdelay);
+      BTSerial.print(channel);
+      delay(btdelay);
+      BTSerial.print("/");
+      delay(btdelay);
+      BTSerial.print((dmxbtstatus[(channel - 1)]));
+      delay(btdelay);
+      BTSerial.println("X");
+      delay(btdelay);
+
+    }
+    if (dmxvalues[(channel - 1)] == 255) {
+      dmxvalues[(channel - 1)] = 0;
+      dmxbt[(channel - 1)] = 0;
+      dmxbtstatus[(channel - 1)] = 0;
+
+
+      BTSerial.print("C");
+      delay(btdelay);
+      BTSerial.print(channel);
+      delay(btdelay);
+      BTSerial.print("/");
+      delay(btdelay);
+      BTSerial.print((dmxvalues[(channel - 1)]));
+      delay(btdelay);
+      BTSerial.println("X");
+      delay(btdelay);
+
+      BTSerial.print("L");
+      delay(btdelay);
+      BTSerial.print(channel);
+      delay(btdelay);
+      BTSerial.print("/");
+      delay(btdelay);
+      BTSerial.print((dmxbtstatus[(channel - 1)]));
+      delay(btdelay);
+      BTSerial.println("X");
+      delay(btdelay);
+    }
+  }
+
+  if (digitalRead(32) == LOW) { //down
+    if (dmxvalues[(channel - 1)] > 0) {
+      dmxvalues[(channel - 1)] = dmxvalues[(channel - 1)] - 1;
+      dmxbt[(channel - 1)] = dmxvalues[(channel - 1)];
+      dmxbtstatus[(channel - 1)] = 1;
+
+      BTSerial.print("C");
+      delay(btdelay);
+      BTSerial.print(channel);
+      delay(btdelay);
+      BTSerial.print("/");
+      delay(btdelay);
+      BTSerial.print((dmxvalues[(channel - 1)]));
+      delay(btdelay);
+      BTSerial.println("X");
+      delay(btdelay);
+
+      BTSerial.print("L");
+      delay(btdelay);
+      BTSerial.print(channel);
+      delay(btdelay);
+      BTSerial.print("/");
+      delay(btdelay);
+      BTSerial.print((dmxbtstatus[(channel - 1)]));
+      delay(btdelay);
+      BTSerial.println("X");
+      delay(btdelay);
+    }
+    if (dmxvalues[(channel - 1)] == 0) {
+      dmxvalues[(channel - 1)] = 0;
+      dmxbt[(channel - 1)] = 0;
+      dmxbtstatus[(channel - 1)] = 0;
+
+      BTSerial.print("C");
+      delay(btdelay);
+      BTSerial.print(channel);
+      delay(btdelay);
+      BTSerial.print("/");
+      delay(btdelay);
+      BTSerial.print((dmxvalues[(channel - 1)]));
+      delay(btdelay);
+      BTSerial.println("X");
+      delay(btdelay);
+
+      BTSerial.print("L");
+      delay(btdelay);
+      BTSerial.print(channel);
+      delay(btdelay);
+      BTSerial.print("/");
+      delay(btdelay);
+      BTSerial.print((dmxbtstatus[(channel - 1)]));
+      delay(btdelay);
+      BTSerial.println("X");
+      delay(btdelay);
+    }
+  }
+
+  if (digitalRead(34) == LOW) { //left
+    if (channel > 1) {
+      channel = channel - 1;
+      Serial.println(channel);
+      BTSerial.print("C");
+      delay(btdelay);
+      BTSerial.print(channel);
+      delay(btdelay);
+      BTSerial.print("/");
+      delay(btdelay);
+      BTSerial.print((dmxvalues[(channel - 1)]));
+      delay(btdelay);
+      BTSerial.println("X");
+      delay(btdelay);
+    }
+    if (channel == 1) {
+      channel = 512;
+      BTSerial.print("C");
+      delay(btdelay);
+      BTSerial.print(channel);
+      delay(btdelay);
+      BTSerial.print("/");
+      delay(btdelay);
+      BTSerial.print((dmxvalues[(channel - 1)]));
+      delay(btdelay);
+      BTSerial.println("X");
+      delay(btdelay);
+    }
+  }
+
+  if (digitalRead(36) == LOW) { //right
+    if (channel < 513) {
+      if (channel < 512) {
+        channel = channel + 1;
+        BTSerial.print("C");
+        delay(btdelay);
+        BTSerial.print(channel);
+        delay(btdelay);
+        BTSerial.print("/");
+        delay(btdelay);
+        BTSerial.print((dmxvalues[(channel - 1)]));
+        delay(btdelay);
+        BTSerial.println("X");
+        delay(btdelay);
+      }
+      if (channel == 512) {
+        channel = 1;
+        BTSerial.print("C");
+        delay(btdelay);
+        BTSerial.print(channel);
+        delay(btdelay);
+        BTSerial.print("/");
+        delay(btdelay);
+        BTSerial.print((dmxvalues[(channel - 1)]));
+        delay(btdelay);
+        BTSerial.println("X");
+        delay(btdelay);
+      }
+    }
+  }
+
+  if (mode == 0) {   //Signaltest
+    Serial.println("Test-Modus");
+
+    if (teststart == 1) {
+      Serial.println("Test-Start");
+      DmxSimple.write(1, 145);
+      DmxSimple.write(256, 216);
+      DmxSimple.write(512, 53);
+      delay(100);
+
+      if (DMXSerial.read(1) == 145 && DMXSerial.read(256) == 216 && DMXSerial.read(512) == 53) {
+        Serial.println("Test erfolgreich");
+        ergebnis = 1;
+        digitalWrite(10, HIGH);
+        digitalWrite(11, LOW);
+        if (btprint == 1) {
+          BTSerial.print("T");
+          delay(btdelay);
+          BTSerial.print(ergebnis);
+          delay(btdelay);
+          BTSerial.println("X");
+          delay(btdelay);
+        }
+      }
+
+      else {
+        Serial.println("Test nicht erfolgreich");
+        ergebnis = 0;
+        digitalWrite(10, LOW);
+        digitalWrite(11, HIGH);
+        if (btprint == 1) {
+          BTSerial.print("T");
+          delay(btdelay);
+          BTSerial.print(ergebnis);
+          delay(btdelay);
+          BTSerial.println("X");
+          delay(btdelay);
+        }
+      }
+    }
+
+    delay(200);
+    DmxSimple.write(1, 0);
+    DmxSimple.write(256, 0);
+    DmxSimple.write(512, 0);
+    ergebnis = 2;
+    Serial.println("Test abgeschlossen");
+    delay(200);
+  }
+
+  if (mode == 1) {   //DMX-Merge
+
+    digitalWrite(10, LOW);
+    digitalWrite(11, LOW);
+
+    for (int i = 0; i <= 511; i++) {
+      if (dmxvaluesin[i] != DMXSerial.read((i + 1))) {
+        dmxvaluesin[i] = DMXSerial.read((i + 1));
+        dmxvalues[i] = dmxvaluesin[i];
+        if (btprint == 1) {
+          BTSerial.print("C");
+          delay(btdelay);
+          BTSerial.print((i + 1));
+          delay(btdelay);
+          BTSerial.print("/");
+          delay(btdelay);
+          BTSerial.print(dmxvalues[i]);
+          delay(btdelay);
+          BTSerial.println("X");
+          delay(50);
+        }
+      }
+      if (dmxbtstatus[i] == 1) {
+        dmxvalues[i] = dmxbt[i];
+      }
+      DmxSimple.write((i + 1), dmxvalues[i]);
+    }
+  }
+
+  if (mode == 2) {   //DMX-Merge
+
+    digitalWrite(10, LOW);
+    digitalWrite(11, LOW);
+    if (artnet.read() == ART_DMX) {
+      ;
+      Serial.println(mode);
+      if (artnetset == 1) {
+        for (int i = 0; i <= 511; i++) {
+          dmxvaluesin[i] = (artnet.getDmxFrame()[i]);
+          dmxvalues[i] = dmxvaluesin[i];
+          if (dmxbtstatus[i] == 1) {
+            dmxvalues[i] = dmxbt[i];
+          }
+          DmxSimple.write((i + 1), dmxvalues[i]);
+        }
+      }
+      if (artnetset == 2) {
+        for (int i = 0; i <= 511; i++) {
+          if (dmxvaluesin[i] != artnet.getDmxFrame()[i]) {
+            dmxvaluesin[i] = (artnet.getDmxFrame()[i]);
+            dmxvalues[i] = dmxvaluesin[i];
+          }
+
+          if (dmxbtstatus[i] == 1) {
+            dmxvalues[i] = dmxbt[i];
+          }
+          DmxSimple.write((i + 1), dmxvalues[i]);
+        }
+      }
+    }
+  }
+}
