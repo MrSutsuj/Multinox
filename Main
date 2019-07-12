@@ -17,7 +17,7 @@ byte ip[] = {10, 0, 0, 41};                             //IP Adresse des Artnet-
 //byte mac[] = {0x90, 0xA2, 0xDA, 0x11, 0x05, 0x14};    //MAC Adresse des Arduinos festlegen
 byte mac[] = {0x04, 0xE9, 0xE5, 0x00, 0x69, 0xEC};      //MAC Adresse des Arduinos festlegen
 
-String modelabel = "Boot";                             //Label
+String modelabel = "DMX";                             //Label
 
 int channel = 1;                                       //Channel-Cursor
 int btprint = 1;                                       //Switch zur Aktivierung der Ausgabe über Bluetooth
@@ -25,6 +25,14 @@ int mode = 1;                                          //Indikator des Modus
 int ergebnis = 2;                                      //Ergebnis des Kabeltests (0=nicht bestanden; 1=bestanden; 2= Standby)
 int artnetset = 1;                                     //Indikator der Artnet-Größe (0=100Kanäle;1=512 Kanäle)
 int count1 = 0;
+
+unsigned long presslength;
+unsigned long presslengthold;
+unsigned long presslengthnew;
+
+int channelold = 0;
+int valueold = 0;
+int statusold = 0;
 
 int displ = 1;                                         //Switch zur Ausgabe der Informationen über das Display
 
@@ -39,7 +47,7 @@ int dmxbt[512];                                        //Speicher-Variablen
 
 int btdelay = 0;                                      //Delay zwischen Senden von Daten an Bluetooth-Schnittstelle zur einwandfreien Übertragung
 int btdelay2 = 30;
-int btdelay3 = 0;
+int btdelay3 = 5;
 
 void setup() {
   artnet.begin(mac, ip);                                 //Start des Artnet-Empfangs
@@ -108,7 +116,7 @@ void draw2(void) {                    //DISPLAY PASSIVE: High Performance Mode
   u8g.setPrintPos(0, 10);
   u8g.print("Multinox");
   u8g.setPrintPos(0, 25);
-  u8g.print("High Performance Mode");
+  u8g.print("Display-Lock");
 }
 
 void draw3(void) {                      //DISPLAY ACTIVE: Test läuft
@@ -142,12 +150,15 @@ void loop(void) {
       Serial.println(data.substring(1));              //gebe Daten aus
       if (data.substring(1, 2).toInt() == 0) {        //wenn zweite Nummer gleich 0, setze mode 0
         mode = 0;
+        channelold = 0;
       }
       if (data.substring(1, 2).toInt() == 1) {        //wenn zweite Nummer gleich 1, setze mode 1
         mode = 1;
+        channelold = 0;
       }
       if (data.substring(1, 2).toInt() == 2) {        //wenn zweite Nummer gleich 2, setze mode 2
         mode = 2;
+        channelold = 0;
       }
       Serial.print("Changed to ");                    //Schreibe "Wechsel zu"
       Serial.println(mode);                           //Gebe mode aus
@@ -297,28 +308,48 @@ void loop(void) {
 
     digitalWrite(10, HIGH);            //Initialisierung der Bluetooth-Verbindung
     delay(100);
-    digitalWrite(10, LOW);          
+    digitalWrite(10, LOW);
     delay(100);
-    digitalWrite(10, HIGH);         
+    digitalWrite(10, HIGH);
     delay(100);
-    digitalWrite(10, LOW);      
+    digitalWrite(10, LOW);
     delay(100);
-    digitalWrite(10, HIGH);       
+    digitalWrite(10, HIGH);
     delay(100);
-    digitalWrite(10, LOW); 
+    digitalWrite(10, LOW);
     digitalWrite(11, LOW);
     delay(300);
 
   }
 
-
-
   if (displ == 1) {
-    if (mode == 1) {
+    if (mode == 1 && channelold != channel) {
+      modelabel="DMX";
       u8g.firstPage();
       do {
         draw();
       } while (u8g.nextPage());
+      channelold = channel;
+    }
+  }
+
+  if (displ == 1) {
+    if (mode == 1 && valueold != dmxvalues[(channel - 1)]) {
+      u8g.firstPage();
+      do {
+        draw();
+      } while (u8g.nextPage());
+      valueold = dmxvalues[(channel - 1)];
+    }
+  }
+
+  if (displ == 1) {
+    if (mode == 1 && statusold != dmxbtstatus[(channel - 1)]) {
+      u8g.firstPage();
+      do {
+        draw();
+      } while (u8g.nextPage());
+      statusold = dmxbtstatus[(channel - 1)];
     }
   }
 
@@ -333,11 +364,32 @@ void loop(void) {
   }
 
   if (displ == 1) {
-    if (mode == 2) {
+    if (mode == 2 && channelold != channel) {
       u8g.firstPage();
       do {
         draw();
       } while (u8g.nextPage());
+      channelold = channel;
+    }
+  }
+
+  if (displ == 1) {
+    if (mode == 2 && valueold != dmxvalues[(channel - 1)]) {
+      u8g.firstPage();
+      do {
+        draw();
+      } while (u8g.nextPage());
+      valueold = dmxvalues[(channel - 1)];
+    }
+  }
+
+  if (displ == 1) {
+    if (mode == 2 && statusold != dmxbtstatus[(channel - 1)]) {
+      u8g.firstPage();
+      do {
+        draw();
+      } while (u8g.nextPage());
+      statusold = dmxbtstatus[(channel - 1)];
     }
   }
 
@@ -371,157 +423,20 @@ void loop(void) {
   }
 
 
-  if (digitalRead(30) == LOW) { //up
-
-    if (dmxvalues[(channel - 1)] < 255) {
-      dmxvalues[(channel - 1)] = dmxvalues[(channel - 1)] + 1;
-      dmxbt[(channel - 1)] = dmxvalues[(channel - 1)];
-      dmxbtstatus[(channel - 1)] = 1;
-
-      BTSerial.print("C");
-      delay(btdelay);
-      BTSerial.print(channel);
-      delay(btdelay);
-      BTSerial.print("/");
-      delay(btdelay);
-      BTSerial.print((dmxvalues[(channel - 1)]));
-      delay(btdelay);
-      BTSerial.print("X");
-      delay(btdelay);
-
-      BTSerial.print("L");
-      delay(btdelay);
-      BTSerial.print(channel);
-      delay(btdelay);
-      BTSerial.print("/");
-      delay(btdelay);
-      BTSerial.print((dmxbtstatus[(channel - 1)]));
-      delay(btdelay);
-      BTSerial.print("X");
-      delay(btdelay);
-
+  if (digitalRead(30) == LOW) {
+    presslengthold = millis();
+    while (digitalRead(30) == LOW) { //up
+      presslength = millis();
     }
-    if (dmxvalues[(channel - 1)] == 255) {
-      dmxvalues[(channel - 1)] = 0;
-      dmxbt[(channel - 1)] = 0;
-      dmxbtstatus[(channel - 1)] = 0;
 
+    if (presslength != 0) {
+      presslengthnew = presslength - presslengthold;
 
-      BTSerial.print("C");
-      delay(btdelay);
-      BTSerial.print(channel);
-      delay(btdelay);
-      BTSerial.print("/");
-      delay(btdelay);
-      BTSerial.print((dmxvalues[(channel - 1)]));
-      delay(btdelay);
-      BTSerial.print("X");
-      delay(btdelay);
+      if (presslengthnew > 0 && presslengthnew < 500 && dmxvalues[(channel - 1)] == 0 && dmxbtstatus[(channel - 1)] != 1) {
+        dmxvalues[(channel - 1)] = 0;
+        dmxbt[(channel - 1)] = dmxvalues[(channel - 1)];
+        dmxbtstatus[(channel - 1)] = 1;
 
-      BTSerial.print("L");
-      delay(btdelay);
-      BTSerial.print(channel);
-      delay(btdelay);
-      BTSerial.print("/");
-      delay(btdelay);
-      BTSerial.print((dmxbtstatus[(channel - 1)]));
-      delay(btdelay);
-      BTSerial.print("X");
-      delay(btdelay);
-    }
-  }
-
-  if (digitalRead(32) == LOW) { //down
-    if (dmxvalues[(channel - 1)] > 0) {
-      dmxvalues[(channel - 1)] = dmxvalues[(channel - 1)] - 1;
-      dmxbt[(channel - 1)] = dmxvalues[(channel - 1)];
-      dmxbtstatus[(channel - 1)] = 1;
-
-      BTSerial.print("C");
-      delay(btdelay);
-      BTSerial.print(channel);
-      delay(btdelay);
-      BTSerial.print("/");
-      delay(btdelay);
-      BTSerial.print((dmxvalues[(channel - 1)]));
-      delay(btdelay);
-      BTSerial.print("X");
-      delay(btdelay);
-
-      BTSerial.print("L");
-      delay(btdelay);
-      BTSerial.print(channel);
-      delay(btdelay);
-      BTSerial.print("/");
-      delay(btdelay);
-      BTSerial.print((dmxbtstatus[(channel - 1)]));
-      delay(btdelay);
-      BTSerial.print("X");
-      delay(btdelay);
-    }
-    if (dmxvalues[(channel - 1)] == 0) {
-      dmxvalues[(channel - 1)] = 0;
-      dmxbt[(channel - 1)] = 0;
-      dmxbtstatus[(channel - 1)] = 0;
-
-      BTSerial.print("C");
-      delay(btdelay);
-      BTSerial.print(channel);
-      delay(btdelay);
-      BTSerial.print("/");
-      delay(btdelay);
-      BTSerial.print((dmxvalues[(channel - 1)]));
-      delay(btdelay);
-      BTSerial.print("X");
-      delay(btdelay);
-
-      BTSerial.print("L");
-      delay(btdelay);
-      BTSerial.print(channel);
-      delay(btdelay);
-      BTSerial.print("/");
-      delay(btdelay);
-      BTSerial.print((dmxbtstatus[(channel - 1)]));
-      delay(btdelay);
-      BTSerial.print("X");
-      delay(btdelay);
-    }
-  }
-
-  if (digitalRead(34) == LOW) { //left
-    if (channel > 1) {
-      channel = channel - 1;
-      Serial.println(channel);
-      BTSerial.print("C");
-      delay(btdelay);
-      BTSerial.print(channel);
-      delay(btdelay);
-      BTSerial.print("/");
-      delay(btdelay);
-      BTSerial.print((dmxvalues[(channel - 1)]));
-      delay(btdelay);
-      BTSerial.print("X");
-      delay(btdelay);
-    }
-    if (channel == 1) {
-      channel = 512;
-      BTSerial.print("C");
-      delay(btdelay);
-      BTSerial.print(channel);
-      delay(btdelay);
-      BTSerial.print("/");
-      delay(btdelay);
-      BTSerial.print((dmxvalues[(channel - 1)]));
-      delay(btdelay);
-      BTSerial.print("X");
-      delay(btdelay);
-    }
-  }
-
-  if (digitalRead(36) == LOW) { //right
-    if (channel < 513) {
-      if (channel < 512) {
-        channel = channel + 1;
         BTSerial.print("C");
         delay(btdelay);
         BTSerial.print(channel);
@@ -532,8 +447,304 @@ void loop(void) {
         delay(btdelay);
         BTSerial.print("X");
         delay(btdelay);
+
+        BTSerial.print("L");
+        delay(btdelay);
+        BTSerial.print(channel);
+        delay(btdelay);
+        BTSerial.print("/");
+        delay(btdelay);
+        BTSerial.print((dmxbtstatus[(channel - 1)]));
+        delay(btdelay);
+        BTSerial.print("X");
+        delay(btdelay);
+        presslength = 0;
+        presslengthnew = 0;
       }
-      if (channel == 512) {
+
+
+      if (presslengthnew > 0 && presslengthnew < 500 && dmxvalues[(channel - 1)] < 255) {
+        dmxvalues[(channel - 1)] = dmxvalues[(channel - 1)] + 1;
+        dmxbt[(channel - 1)] = dmxvalues[(channel - 1)];
+        dmxbtstatus[(channel - 1)] = 1;
+
+        BTSerial.print("C");
+        delay(btdelay);
+        BTSerial.print(channel);
+        delay(btdelay);
+        BTSerial.print("/");
+        delay(btdelay);
+        BTSerial.print((dmxvalues[(channel - 1)]));
+        delay(btdelay);
+        BTSerial.print("X");
+        delay(btdelay);
+
+        BTSerial.print("L");
+        delay(btdelay);
+        BTSerial.print(channel);
+        delay(btdelay);
+        BTSerial.print("/");
+        delay(btdelay);
+        BTSerial.print((dmxbtstatus[(channel - 1)]));
+        delay(btdelay);
+        BTSerial.print("X");
+        delay(btdelay);
+        presslength = 0;
+        presslengthnew = 0;
+      }
+      if (presslengthnew > 0 && presslengthnew < 500 && dmxvalues[(channel - 1)] == 255) {
+        dmxvalues[(channel - 1)] = 255;
+        dmxbt[(channel - 1)] = dmxvalues[(channel - 1)];
+        dmxbtstatus[(channel - 1)] = 1;
+
+
+        BTSerial.print("C");
+        delay(btdelay);
+        BTSerial.print(channel);
+        delay(btdelay);
+        BTSerial.print("/");
+        delay(btdelay);
+        BTSerial.print((dmxvalues[(channel - 1)]));
+        delay(btdelay);
+        BTSerial.print("X");
+        delay(btdelay);
+
+        BTSerial.print("L");
+        delay(btdelay);
+        BTSerial.print(channel);
+        delay(btdelay);
+        BTSerial.print("/");
+        delay(btdelay);
+        BTSerial.print((dmxbtstatus[(channel - 1)]));
+        delay(btdelay);
+        BTSerial.print("X");
+        delay(btdelay);
+        presslength = 0;
+        presslengthnew = 0;
+      }
+
+      if (presslengthnew > 0 && presslengthnew >= 500 && dmxvalues[(channel - 1)] < 255) {
+        dmxvalues[(channel - 1)] = 255;
+        dmxbt[(channel - 1)] = dmxvalues[(channel - 1)];
+        dmxbtstatus[(channel - 1)] = 1;
+
+
+        BTSerial.print("C");
+        delay(btdelay);
+        BTSerial.print(channel);
+        delay(btdelay);
+        BTSerial.print("/");
+        delay(btdelay);
+        BTSerial.print((dmxvalues[(channel - 1)]));
+        delay(btdelay);
+        BTSerial.print("X");
+        delay(btdelay);
+
+        BTSerial.print("L");
+        delay(btdelay);
+        BTSerial.print(channel);
+        delay(btdelay);
+        BTSerial.print("/");
+        delay(btdelay);
+        BTSerial.print((dmxbtstatus[(channel - 1)]));
+        delay(btdelay);
+        BTSerial.print("X");
+        delay(btdelay);
+        presslength = 0;
+        presslengthnew = 0;
+      }
+    }
+  }
+
+
+  if (digitalRead(32) == LOW) {
+    presslengthold = millis();
+    while (digitalRead(32) == LOW) { //up
+      presslength = millis();
+    }
+
+    if (presslength != 0) {
+      presslengthnew = presslength - presslengthold;
+
+      if (presslengthnew > 0 && presslengthnew < 500 && dmxvalues[(channel - 1)] > 0) {
+        dmxvalues[(channel - 1)] = dmxvalues[(channel - 1)] - 1;
+        dmxbt[(channel - 1)] = dmxvalues[(channel - 1)];
+        dmxbtstatus[(channel - 1)] = 1;
+
+        BTSerial.print("C");
+        delay(btdelay);
+        BTSerial.print(channel);
+        delay(btdelay);
+        BTSerial.print("/");
+        delay(btdelay);
+        BTSerial.print((dmxvalues[(channel - 1)]));
+        delay(btdelay);
+        BTSerial.print("X");
+        delay(btdelay);
+
+        BTSerial.print("L");
+        delay(btdelay);
+        BTSerial.print(channel);
+        delay(btdelay);
+        BTSerial.print("/");
+        delay(btdelay);
+        BTSerial.print((dmxbtstatus[(channel - 1)]));
+        delay(btdelay);
+        BTSerial.print("X");
+        delay(btdelay);
+        presslength = 0;
+        presslengthnew = 0;
+      }
+      if (presslengthnew > 0 && presslengthnew < 500 && dmxvalues[(channel - 1)] == 0 && dmxbtstatus[(channel - 1)] != 1) {
+        dmxvalues[(channel - 1)] = 0;
+        dmxbt[(channel - 1)] = dmxvalues[(channel - 1)];
+        dmxbtstatus[(channel - 1)] = 1;
+
+        BTSerial.print("C");
+        delay(btdelay);
+        BTSerial.print(channel);
+        delay(btdelay);
+        BTSerial.print("/");
+        delay(btdelay);
+        BTSerial.print((dmxvalues[(channel - 1)]));
+        delay(btdelay);
+        BTSerial.print("X");
+        delay(btdelay);
+
+        BTSerial.print("L");
+        delay(btdelay);
+        BTSerial.print(channel);
+        delay(btdelay);
+        BTSerial.print("/");
+        delay(btdelay);
+        BTSerial.print((dmxbtstatus[(channel - 1)]));
+        delay(btdelay);
+        BTSerial.print("X");
+        delay(btdelay);
+        presslength = 0;
+        presslengthnew = 0;
+      }
+
+      if (presslengthnew > 0 && presslengthnew < 500 && dmxvalues[(channel - 1)] == 0 && dmxbtstatus[(channel - 1)] == 1) {
+        dmxvalues[(channel - 1)] = 0;
+        dmxbt[(channel - 1)] = dmxvalues[(channel - 1)];
+        dmxbtstatus[(channel - 1)] = 0;
+
+        BTSerial.print("C");
+        delay(btdelay);
+        BTSerial.print(channel);
+        delay(btdelay);
+        BTSerial.print("/");
+        delay(btdelay);
+        BTSerial.print((dmxvalues[(channel - 1)]));
+        delay(btdelay);
+        BTSerial.print("X");
+        delay(btdelay);
+
+        BTSerial.print("L");
+        delay(btdelay);
+        BTSerial.print(channel);
+        delay(btdelay);
+        BTSerial.print("/");
+        delay(btdelay);
+        BTSerial.print((dmxbtstatus[(channel - 1)]));
+        delay(btdelay);
+        BTSerial.print("X");
+        delay(btdelay);
+        presslength = 0;
+        presslengthnew = 0;
+      }
+
+      if (presslengthnew > 0 && presslengthnew >= 500 && dmxvalues[(channel - 1)] >= 0) {
+        dmxvalues[(channel - 1)] = 0;
+        dmxbt[(channel - 1)] = dmxvalues[(channel - 1)];
+        dmxbtstatus[(channel - 1)] = 0;
+
+
+        BTSerial.print("C");
+        delay(btdelay);
+        BTSerial.print(channel);
+        delay(btdelay);
+        BTSerial.print("/");
+        delay(btdelay);
+        BTSerial.print((dmxvalues[(channel - 1)]));
+        delay(btdelay);
+        BTSerial.print("X");
+        delay(btdelay);
+
+        BTSerial.print("L");
+        delay(btdelay);
+        BTSerial.print(channel);
+        delay(btdelay);
+        BTSerial.print("/");
+        delay(btdelay);
+        BTSerial.print((dmxbtstatus[(channel - 1)]));
+        delay(btdelay);
+        BTSerial.print("X");
+        delay(btdelay);
+        presslength = 0;
+        presslengthnew = 0;
+      }
+    }
+  }
+
+  if (digitalRead(34) == LOW) {
+    presslengthold = millis();
+    while (digitalRead(34) == LOW) { //up
+      presslength = millis();
+    }
+
+    if (presslength != 0) {
+      presslengthnew = presslength - presslengthold;
+
+      if (presslengthnew < 500 && channel > 0) {
+        channel = channel - 1;
+        if(channel>0){
+        Serial.println(channel);
+        BTSerial.print("C");
+        delay(btdelay);
+        BTSerial.print(channel);
+        delay(btdelay);
+        BTSerial.print("/");
+        delay(btdelay);
+        BTSerial.print((dmxvalues[(channel - 1)]));
+        delay(btdelay);
+        BTSerial.print("X");
+        delay(btdelay);}
+        presslength = 0;
+        presslengthnew = 0;
+      }
+      if (presslengthnew < 500 && channel == 0) {
+        channel = 512;
+        BTSerial.print("C");
+        delay(btdelay);
+        BTSerial.print(channel);
+        delay(btdelay);
+        BTSerial.print("/");
+        delay(btdelay);
+        BTSerial.print((dmxvalues[(channel - 1)]));
+        delay(btdelay);
+        BTSerial.print("X");
+        delay(btdelay);
+        presslength = 0;
+        presslengthnew = 0;
+      }
+      if (presslengthnew >= 500 && channel > 100) {
+        channel = channel - 100;
+        BTSerial.print("C");
+        delay(btdelay);
+        BTSerial.print(channel);
+        delay(btdelay);
+        BTSerial.print("/");
+        delay(btdelay);
+        BTSerial.print((dmxvalues[(channel - 1)]));
+        delay(btdelay);
+        BTSerial.print("X");
+        delay(btdelay);
+        presslength = 0;
+        presslengthnew = 0;
+      }
+      if (presslengthnew >= 500 && channel <= 100) {
         channel = 1;
         BTSerial.print("C");
         delay(btdelay);
@@ -545,9 +756,86 @@ void loop(void) {
         delay(btdelay);
         BTSerial.print("X");
         delay(btdelay);
+        presslength = 0;
+        presslengthnew = 0;
       }
     }
   }
+
+
+  if (digitalRead(36) == LOW) {
+    presslengthold = millis();
+    while (digitalRead(36) == LOW) { //up
+      presslength = millis();
+    }
+    if (presslength != 0) {
+      presslengthnew = presslength - presslengthold;
+
+      if (presslengthnew < 500 && channel < 514) {
+        if (channel < 513) {
+          channel = channel + 1;
+          if(channel<513){
+          BTSerial.print("C");
+          delay(btdelay);
+          BTSerial.print(channel);
+          delay(btdelay);
+          BTSerial.print("/");
+          delay(btdelay);
+          BTSerial.print((dmxvalues[(channel - 1)]));
+          delay(btdelay);
+          BTSerial.print("X");
+          delay(btdelay);}
+          presslength = 0;
+          presslengthnew = 0;
+        }
+      }
+        if (presslengthnew < 500 && channel == 513) {
+          channel = 1;
+          BTSerial.print("C");
+          delay(btdelay);
+          BTSerial.print(channel);
+          delay(btdelay);
+          BTSerial.print("/");
+          delay(btdelay);
+          BTSerial.print((dmxvalues[(channel - 1)]));
+          delay(btdelay);
+          BTSerial.print("X");
+          delay(btdelay);
+          presslength = 0;
+          presslengthnew = 0;
+        }
+        if (presslengthnew >= 500 && channel < 411) {
+          channel = channel+100;
+          BTSerial.print("C");
+          delay(btdelay);
+          BTSerial.print(channel);
+          delay(btdelay);
+          BTSerial.print("/");
+          delay(btdelay);
+          BTSerial.print((dmxvalues[(channel - 1)]));
+          delay(btdelay);
+          BTSerial.print("X");
+          delay(btdelay);
+          presslength = 0;
+          presslengthnew = 0;
+        }
+        if (presslengthnew >= 500 && channel >= 411) {
+          channel = 512;
+          BTSerial.print("C");
+          delay(btdelay);
+          BTSerial.print(channel);
+          delay(btdelay);
+          BTSerial.print("/");
+          delay(btdelay);
+          BTSerial.print((dmxvalues[(channel - 1)]));
+          delay(btdelay);
+          BTSerial.print("X");
+          delay(btdelay);
+          presslength = 0;
+          presslengthnew = 0;
+        }
+      }
+    }
 
 
 
@@ -650,7 +938,7 @@ void loop(void) {
           BTSerial.print(dmxvalues[i]);
           delay(btdelay);
           BTSerial.print("X");
-          delay(50);
+          delay(btdelay);
         }
       }
       if (dmxbtstatus[i] == 1) {
@@ -673,7 +961,7 @@ void loop(void) {
       if (artnetset == 1) {
         for (int i = 0; i <= 511; i++) {
           if (dmxvaluesin[i] != artnet.getDmxFrame()[i]) {
-            dmxvaluesin[i] = (artnet.getDmxFrame()[1]);
+            dmxvaluesin[i] = (artnet.getDmxFrame()[i]);
             dmxvalues[i] = dmxvaluesin[i];
 
             if (btprint == 1 && dmxbtstatus[i] == 0) {
@@ -688,6 +976,7 @@ void loop(void) {
               BTSerial.print("X");
               delay(btdelay);
             }
+          }
 
             if (dmxbtstatus[i] == 1) {
               dmxvalues[i] = dmxbt[i];
@@ -695,7 +984,6 @@ void loop(void) {
             DmxSimple.write((i + 1), dmxvalues[i]);
           }
         }
-      }
       if (artnetset == 2) {
         for (int i = 0; i <= 99; i++) {
           if (dmxvaluesin[i] != artnet.getDmxFrame()[i]) {
@@ -726,12 +1014,15 @@ void loop(void) {
 
   if (mode == 0 && modelabel != "Test") {
     modelabel = "Test";
+    channelold=0;
   }
   if (mode == 1 && modelabel != "DMX") {
     modelabel = "DMX";
+    channelold=0;
   }
   if (mode == 2 && modelabel != "ArtNet") {
     modelabel = "ArtNet";
+    channelold=0;
   }
 
 }
