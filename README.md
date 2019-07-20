@@ -1,3 +1,3 @@
 # Multinox
 
-Der DMX-Tester einer neuen Ära
+Arduino-Code, Struktur- und Schaltplan
