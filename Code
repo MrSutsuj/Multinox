@@ -1,8 +1,9 @@
 #include "U8glib.h"                               //Einbindung der Bibliothek "U8glib" zur Beschriftung des Displays
 #include <Artnet.h>                               //Einbindung der Bibliothek "Artnet", ohne Versatz zum Array
 #include <Ethernet.h>                             //Einbindung der Bibliothek "Ethernet" zur Verwendung der Ethernet-Schnittstelle
-#include <DMXSerial.h>                            //DMX-Input-Bibliothek, Versatz um +1 zum Array, da Kanäle 1-512
-#include <DmxSimple.h>                            //DMX-Output-Bibliothek, Versatz um +1 zum Array, da Kanäle 1-512
+#include <DMXSerial.h>                            //DMX-Input-Bibliothek, Versatz um +1 zum Array, da DMX-Kanäle 1-512
+#include <DmxSimple.h>                            //DMX-Output-Bibliothek, Versatz um +1 zum Array, da DMX-Kanäle 1-512
+
 #define BTSerial Serial2                          //Definition der zweiten seriellen Ports für das Bluetooth-Modul
 Artnet artnet;                                    //Zuweisung der Variablen artnet
 
