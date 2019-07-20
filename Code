@@ -45,7 +45,6 @@ void setup() {
   BTSerial.begin(115200);                         //Start der Bluetooth-Verbidung mit 115200 Baut
   Serial.begin(115200);                           //Starten des Serial-Monitors mit 115200 Baut
 
-
   for (int i = 0; i <= 511; i++) {                //Initialisierung der Werte-Speicher auf 0
     dmxvalues[i] = 0;                             //Ausgangs-Speicher
     dmxvaluesin[i] = 0;                           //Eingangs-Speicher
@@ -61,9 +60,7 @@ void setup() {
   pinMode(36, INPUT_PULLUP);                      //rechts
   DMXSerial.init(DMXReceiver);                    //Einstellen der Serial-Bibliothek als DMX-Input
   DmxSimple.usePin(45);                           //Einstellen des Ausgangs für den DMX-Output
-
   delay(100);                                     //Setup-Delay
-
   digitalWrite(10, HIGH);                         //LED grün an
   digitalWrite(11, LOW);                          //LED rot aus
   delay(100);                                     //Setup-Delay
@@ -76,9 +73,7 @@ void setup() {
   digitalWrite(10, LOW);                          //LED aus
   digitalWrite(11, LOW);                          //LED aus
   delay(100);
-
 }
-
 
 void dmxbtsend () {                               //DMX-Paket senden
   BTSerial.print("C");                            //Sende Paket-Indikator C
@@ -95,7 +90,6 @@ void dmxlocksend () {                             //Status-Lock-Paket senden
   BTSerial.print((dmxbtstatus[(channel - 1)]));   //Sende Status für Channel
   BTSerial.print("X");                            //Sende Paket-Abschluss
 }
-
 
 void sendandreset () {                      //DMX-Pakete senden und Zeiten-Reset
   dmxbtsend();                              //DMX-Paket senden
@@ -167,7 +161,6 @@ void loop() {                                         //Programm-Schleife
       BTSerial.print("X");                            //Sende Paket-Abschluss
     }
 
-
     if (data.substring(0, 1) == "S") {                //wenn Paket-Indikator S(Initialisierungs-Anforderungs-Pakete)
       if (data.substring(1, 2).toInt() == 1) {        //eine 1 enthält
         btinit = 1;                                   //setze btinit auf 1
@@ -221,6 +214,7 @@ void loop() {                                         //Programm-Schleife
       }
     }
   }
+  
   if (btinit == 1) {                                    //wenn Initialisierungs-Paket angefordert wird
     for (int i = 1; i <= 511; i++) {                    //for-Schleife zum Durchgehen aller Kanäle
       BTSerial.print("C");                              //Sende Paket-Indikator C
@@ -238,7 +232,6 @@ void loop() {                                         //Programm-Schleife
     }
     delay(100);                                         //Delay
     btinit = 0;                                         //resete Initialisierungs-Anforderung
-
     digitalWrite(10, HIGH);                             //LED grün an
     delay(100);                                         //Delay
     digitalWrite(10, LOW);                              //LED grün aus
@@ -340,13 +333,11 @@ void loop() {                                         //Programm-Schleife
     }
   }
 
-
   if (digitalRead(30) == LOW) {                                                                                                     //wenn oben gedrückt wird
     presslengthold = millis();                                                                                                      //Speichere Zeitpunkt beim ersten Runterdrücken
     while (digitalRead(30) == LOW) { //up                                                                                           //während oben gedrückt ist
       presslength = millis();                                                                                                       //Aktualisiere Zeit bis Loslassen
     }
-
     if (presslength != 0) {                                                                                                         //wenn Zeit ungleich 0
       presslengthnew = presslength - presslengthold;                                                                                //Bilde Differenz aus erstes Runterdrücken und Loslassen
 
@@ -356,21 +347,18 @@ void loop() {                                         //Programm-Schleife
         dmxbtstatus[(channel - 1)] = 1;                                                                                             //Setze Overwrite-Status für Channel auf 1
         sendandreset();                                                                                                             //Sende DMX-Pakete und resete Zeiten
       }
-
       if (presslengthnew > 0 && presslengthnew < 500 && dmxvalues[(channel - 1)] < 255) {                                           //wenn Zeit-Differenz größer 0 und kleiner 500 und DMX-Wert kleiner 255
         dmxvalues[(channel - 1)] = dmxvalues[(channel - 1)] + 1;                                                                    //Erhöhe DMX-Ausgangswert für Channel
         dmxbt[(channel - 1)] = dmxvalues[(channel - 1)];                                                                            //Setze Overwrite-Wert für Channel gleich dem DMX-Ausgangswert
         dmxbtstatus[(channel - 1)] = 1;                                                                                             //Setze Overwrite-Status für Channel auf 1
         sendandreset();                                                                                                             //Sende DMX-Pakete und resete Zeiten
       }
-
       if (presslengthnew > 0 && presslengthnew < 500 && dmxvalues[(channel - 1)] == 255) {                                          //wenn Zeit-Differenz größer 0 und kleiner 500 und DMX-Wert 255
         dmxvalues[(channel - 1)] = 255;                                                                                             //Setze DMX-Ausgangswert für Channel auf Wert 255
         dmxbt[(channel - 1)] = dmxvalues[(channel - 1)];                                                                            //Setze Overwrite-Wert für Channel gleich dem DMX-Ausgangswert
         dmxbtstatus[(channel - 1)] = 1;                                                                                             //Setze Overwrite-Status für Channel auf 1
         sendandreset();                                                                                                             //Sende DMX-Pakete und resete Zeiten
       }
-
       if (presslengthnew > 0 && presslengthnew >= 500 && dmxvalues[(channel - 1)] < 255) {                                          //wenn Zeit-Differenz größer 0 und größer gleich 500 und DMX-Wert kleiner 255 ("Highlight")
         dmxvalues[(channel - 1)] = 255;                                                                                             //Setze DMX-Ausgangswert für Channel auf Wert 255
         dmxbt[(channel - 1)] = dmxvalues[(channel - 1)];                                                                            //Setze Overwrite-Wert für Channel gleich dem DMX-Ausgangswert
@@ -380,16 +368,13 @@ void loop() {                                         //Programm-Schleife
     }
   }
 
-
   if (digitalRead(32) == LOW) {                                                                                                     //wenn unten gedrückt wird
     presslengthold = millis();                                                                                                      //Speichere Zeitpunkt beim ersten Runterdrücken
     while (digitalRead(32) == LOW) {                                                                                                //während unten gedrückt ist
       presslength = millis();                                                                                                       //Aktualisiere Zeit bis Loslassen
     }
-
     if (presslength != 0) {                                                                                                         //wenn Zeit ungleich 0
       presslengthnew = presslength - presslengthold;                                                                                //Bilde Differenz aus erstes Runterdrücken und Loslassen
-
       if (presslengthnew > 0 && presslengthnew < 500 && dmxvalues[(channel - 1)] > 0) {                                             //wenn Zeit-Differenz größer 0 und kleiner 500 und Wert größer 0
         dmxvalues[(channel - 1)] = dmxvalues[(channel - 1)] - 1;                                                                    //Reduziere DMX-Ausgangswert für Channel
         dmxbt[(channel - 1)] = dmxvalues[(channel - 1)];                                                                            //Setze Overwrite-Wert für Channel gleich dem DMX-Ausgangswert
@@ -457,11 +442,9 @@ void loop() {                                         //Programm-Schleife
     presslengthold = millis();                                          //Speichere Zeitpunkt beim ersten Runterdrücken
     while (digitalRead(36) == LOW) {                                    //während rechts gedrückt ist
       presslength = millis();                                           //Aktualisiere Zeit bis Loslassen
-
     }
     if (presslength != 0) {                                             //wenn Zeit ungleich 0
       presslengthnew = presslength - presslengthold;                    //Bilde Differenz aus erstes Runterdrücken und Loslassen
-
       if (presslengthnew < 500 && channel < 513) {                      //wenn Zeit-Differenz kleiner 500 und Channel kleiner 514
         channel = channel + 1;                                          //Erhöhe Channel um 1
         dmxbtsend();                                                    //Sende nur DMX-Paket
@@ -505,7 +488,6 @@ void loop() {                                         //Programm-Schleife
     if (DMXSerial.read(1) == 2 && DMXSerial.read(256) == 2 && DMXSerial.read(512) == 2) {           //wenn eingelesene Werte stimmen
       count1 = count1 + 1;                                                                          //erhöhe count1
     }
-
     delay(100);                                                                                     //Delay zum sicheren Durchgang
     DmxSimple.write(1, 100);                                                                        //Setze Testkanal auf neuen Wert
     DmxSimple.write(256, 100);                                                                      //Setze Testkanal auf neuen Wert
@@ -566,7 +548,6 @@ void loop() {                                         //Programm-Schleife
   }
 
   if (mode == 2) {                                        //ArtNet-Kombimodus
-
     digitalWrite(10, LOW);                                //LED aus
     digitalWrite(11, LOW);                                //LED aus
     if (artnet.read() == ART_DMX) {                       //wenn ArtNet-Pakete ankommen
